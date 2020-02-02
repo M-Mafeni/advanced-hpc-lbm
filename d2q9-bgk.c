@@ -249,6 +249,23 @@ int main(int argc, char* argv[])
   printf("Elapsed time:\t\t\t%.6lf (s)\n", toc - tic);
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
+  //copy values back into cells
+  for (int jj = 0; jj < params.ny; jj++)
+  {
+    for (int ii = 0; ii < params.nx; ii++)
+    {
+      int index =ii + jj*params.nx;
+      cells[index].speeds[0] = cells_arr.speeds0[index];
+      cells[index].speeds[1] = cells_arr.speedsE[index];
+      cells[index].speeds[2] = cells_arr.speedsN[index];
+      cells[index].speeds[3] = cells_arr.speedsW[index];
+      cells[index].speeds[4] = cells_arr.speedsS[index];
+      cells[index].speeds[5] = cells_arr.speedsNE[index];
+      cells[index].speeds[6] = cells_arr.speedsNW[index];
+      cells[index].speeds[7] = cells_arr.speedsSW[index];
+      cells[index].speeds[8] = cells_arr.speedsSE[index];
+    }
+  }
   write_values(params, cells, obstacles, av_vels);
   finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels);
 
