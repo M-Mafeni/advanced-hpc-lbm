@@ -79,6 +79,7 @@ typedef struct
 } t_speed;
 
 typedef struct{
+  float *speeds0;
   float *speedsN;
   float *speedsS;
   float *speedsW;
@@ -162,6 +163,7 @@ int main(int argc, char* argv[])
   /* initialise our data structures and load values from file */
   initialise(paramfile, obstaclefile, &params, &cells, &tmp_cells, &obstacles, &av_vels);
   //initialise temp cells array
+  float* speeds0 = malloc(sizeof(float) * params.ny * params.nx);
   float* speedsN = malloc(sizeof(float) * params.ny * params.nx);
   float* speedsS = malloc(sizeof(float) * params.ny * params.nx);
   float* speedsW = malloc(sizeof(float) * params.ny * params.nx);
@@ -171,6 +173,7 @@ int main(int argc, char* argv[])
   float* speedsSW = malloc(sizeof(float) * params.ny * params.nx);
   float* speedsSE = malloc(sizeof(float) * params.ny * params.nx);
 
+  float* tmp_speeds0 = malloc(sizeof(float) * params.ny * params.nx);
   float* tmp_speedsN = malloc(sizeof(float) * params.ny * params.nx);
   float* tmp_speedsS = malloc(sizeof(float) * params.ny * params.nx);
   float* tmp_speedsW = malloc(sizeof(float) * params.ny * params.nx);
@@ -184,6 +187,9 @@ int main(int argc, char* argv[])
     for (int ii = 0; ii < params.nx; ii++)
     {
       int index =ii + jj*params.nx;
+      speeds0[index] = cells[index].speeds[0];
+      tmp_speeds0[index] = tmp_cells[index].speeds[0];
+      
       speedsN[index] = cells[index].speeds[2];
       tmp_speedsN[index] = tmp_cells[index].speeds[2];
 
