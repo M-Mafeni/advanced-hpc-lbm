@@ -163,25 +163,25 @@ int main(int argc, char* argv[])
   /* initialise our data structures and load values from file */
   initialise(paramfile, obstaclefile, &params, &cells, &tmp_cells, &obstacles, &av_vels);
   //initialise temp cells array
-  float* speeds0 = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsN = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsS = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsW = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsE = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsNW = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsNE = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsSW = malloc(sizeof(float) * params.ny * params.nx);
-  float* speedsSE = malloc(sizeof(float) * params.ny * params.nx);
+  float* speeds0 = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsN = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsS = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsE = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsNW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsNE = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsSW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* speedsSE = (float*)malloc(sizeof(float) * params.ny * params.nx);
 
-  float* tmp_speeds0 = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsN = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsS = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsW = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsE = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsNW = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsNE = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsSW = malloc(sizeof(float) * params.ny * params.nx);
-  float* tmp_speedsSE = malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speeds0 = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsN = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsS = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsE = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsNW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsNE = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsSW = (float*)malloc(sizeof(float) * params.ny * params.nx);
+  float* tmp_speedsSE = (float*)malloc(sizeof(float) * params.ny * params.nx);
   for (int jj = 0; jj < params.ny; jj++)
   {
     for (int ii = 0; ii < params.nx; ii++)
@@ -189,7 +189,7 @@ int main(int argc, char* argv[])
       int index =ii + jj*params.nx;
       speeds0[index] = cells[index].speeds[0];
       tmp_speeds0[index] = tmp_cells[index].speeds[0];
-      
+
       speedsN[index] = cells[index].speeds[2];
       tmp_speedsN[index] = tmp_cells[index].speeds[2];
 
@@ -215,10 +215,10 @@ int main(int argc, char* argv[])
       tmp_speedsSE[index] = tmp_cells[index].speeds[8];
     }
   }
-  t_speed_arr tmp_cells_arr = {tmp_speedsN,tmp_speedsS,tmp_speedsW,tmp_speedsE,
+  t_speed_arr tmp_cells_arr = {tmp_speeds0,tmp_speedsN,tmp_speedsS,tmp_speedsW,tmp_speedsE,
     tmp_speedsNW,tmp_speedsNE,tmp_speedsSW,tmp_speedsSE};
 
-  t_speed_arr cells_arr = {speedsN,speedsS,speedsW,speedsE,
+  t_speed_arr cells_arr = {speeds0,speedsN,speedsS,speedsW,speedsE,
     speedsNW,speedsNE,speedsSW,speedsSE};
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
@@ -299,7 +299,7 @@ int accelerate_flow(const t_param params, t_speed_arr* cells, int* obstacles)
   return EXIT_SUCCESS;
 }
 
-int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed* tmp_cells,int* obstacles)
+int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed_arr* tmp_cells,int* obstacles)
 {
   //propagation needs neighbouring cells
   //halo exchange?
@@ -319,15 +319,16 @@ int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed* tmp
       /* propagate densities from neighbouring cells, following
       ** appropriate directions of travel and writing into
       ** scratch space grid */
-      tmp_cells[ii + jj*params.nx].speeds[0] = cells[ii + jj*params.nx].speeds[0]; /* central cell, no movement */
-      tmp_cells[ii + jj*params.nx].speeds[1] = cells[x_w + jj*params.nx].speeds[1]; /* east */
-      tmp_cells[ii + jj*params.nx].speeds[2] = cells[ii + y_s*params.nx].speeds[2]; /* north */
-      tmp_cells[ii + jj*params.nx].speeds[3] = cells[x_e + jj*params.nx].speeds[3]; /* west */
-      tmp_cells[ii + jj*params.nx].speeds[4] = cells[ii + y_n*params.nx].speeds[4]; /* south */
-      tmp_cells[ii + jj*params.nx].speeds[5] = cells[x_w + y_s*params.nx].speeds[5]; /* north-east */
-      tmp_cells[ii + jj*params.nx].speeds[6] = cells[x_e + y_s*params.nx].speeds[6]; /* north-west */
-      tmp_cells[ii + jj*params.nx].speeds[7] = cells[x_e + y_n*params.nx].speeds[7]; /* south-west */
-      tmp_cells[ii + jj*params.nx].speeds[8] = cells[x_w + y_n*params.nx].speeds[8]; /* south-east */
+      int index= ii + jj*params.nx;
+      tmp_cells->speeds0[index] = cells->speeds0[ii+jj*params.nx]; /* central cell, no movement */
+      tmp_cells->speedsE[index] = cells->speedsE[x_w + jj*params.nx]; /* east */
+      tmp_cells->speedsN[index] = cells->speedsN[ii + y_s*params.nx]; /* north */
+      tmp_cells->speedsW[index] = cells->speedsW[x_e + jj*params.nx]; /* west */
+      tmp_cells->speedsS[index] = cells->speedsS[ii + y_n*params.nx]; /* south */
+      tmp_cells->speedsNE[index] = cells->speedsNE[x_w + y_s*params.nx]; /* north-east */
+      tmp_cells->speedsNW[index] = cells->speedsNW[x_e + y_s*params.nx]; /* north-west */
+      tmp_cells->speedsSW[index] = cells->speedsSW[x_e + y_n*params.nx]; /* south-west */
+      tmp_cells->speedsSE[index] = cells->speedsSE[x_w + y_n*params.nx]; /* south-east */
 
       //REBOUND step
       /* if the cell contains an obstacle */
@@ -335,14 +336,14 @@ int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed* tmp
       {
         /* called after propagate, so taking values from scratch space
         ** mirroring, and writing into main grid */
-        cells[ii + jj*params.nx].speeds[1] = tmp_cells[ii + jj*params.nx].speeds[3];
-        cells[ii + jj*params.nx].speeds[2] = tmp_cells[ii + jj*params.nx].speeds[4];
-        cells[ii + jj*params.nx].speeds[3] = tmp_cells[ii + jj*params.nx].speeds[1];
-        cells[ii + jj*params.nx].speeds[4] = tmp_cells[ii + jj*params.nx].speeds[2];
-        cells[ii + jj*params.nx].speeds[5] = tmp_cells[ii + jj*params.nx].speeds[7];
-        cells[ii + jj*params.nx].speeds[6] = tmp_cells[ii + jj*params.nx].speeds[8];
-        cells[ii + jj*params.nx].speeds[7] = tmp_cells[ii + jj*params.nx].speeds[5];
-        cells[ii + jj*params.nx].speeds[8] = tmp_cells[ii + jj*params.nx].speeds[6];
+        cells->speedsE[index] = tmp_cells->speedsW[index];
+        cells->speedsN[index] = tmp_cells->speedsS[index];
+        cells->speedsW[index] = tmp_cells->speedsE[index];
+        cells->speedsS[index] = tmp_cells->speedsN[index];
+        cells->speedsNE[index] = tmp_cells->speedsSW[index];
+        cells->speedsNW[index] = tmp_cells->speedsSE[index];
+        cells->speedsSW[index] = tmp_cells->speedsNE[index];
+        cells->speedsSE[index] = tmp_cells->speedsNW[index];
       }
     }
   }
