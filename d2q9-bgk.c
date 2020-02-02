@@ -270,30 +270,30 @@ int accelerate_flow(const t_param params, t_speed_arr* cells, int* obstacles)
  //PUT OPENMP FOR Pragma here?
   for (int ii = 0; ii < params.nx; ii++)
   {
+    int index = ii + jj*params.nx;
+
     /* if the cell is not occupied and
     ** we don't send a negative density */
-    // if (!obstacles[ii + jj*params.nx]
-    //     && (cells[ii + jj*params.nx].speeds[3] - w1) > 0.f
-    //     && (cells[ii + jj*params.nx].speeds[6] - w2) > 0.f
-    //     && (cells[ii + jj*params.nx].speeds[7] - w2) > 0.f)
-    // {
-    if(true){
-      int index = ii + jj*params.nx;
+    if (!obstacles[index]
+        && (cells->speedsW[index] - w1) > 0.f
+        && (cells->speedsNW[index] - w2) > 0.f
+        && (cells->speedsSW[index] - w2) > 0.f)
+    {
       /* increase 'east-side' densities */
       cells->speedsE[index] += w1;
       cells->speedsNE[index] += w2;
       cells->speedsSE[index] += w2;
       /* decrease 'west-side' densities */
-      cells[ii + jj*params.nx].speeds[3] -= w1;
-      cells[ii + jj*params.nx].speeds[6] -= w2;
-      cells[ii + jj*params.nx].speeds[7] -= w2;
+      cells->speedsW[index] -= w1;
+      cells->speedsNW[index] -= w2;
+      cells->speedsSW[index] -= w2;
     }
   }
 
   return EXIT_SUCCESS;
 }
 
-int propagate_and_rebound(const t_param params, t_speed* cells, t_speed* tmp_cells,int* obstacles)
+int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed* tmp_cells,int* obstacles)
 {
   //propagation needs neighbouring cells
   //halo exchange?
