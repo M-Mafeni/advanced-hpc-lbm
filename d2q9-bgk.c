@@ -103,12 +103,12 @@ int initialise(const char* paramfile, const char* obstaclefile,
 ** timestep calls, in order, the functions:
 ** accelerate_flow(), propagate(), rebound() & collision()
 */
-int timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles);
-int accelerate_flow(const t_param params, t_speed* cells, int* obstacles);
-int propagate_and_rebound(const t_param params, t_speed* cells, t_speed* tmp_cells,int* obstacles);
-int rebound(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles);
+int timestep(const t_param params, t_speed_arr* cells, t_speed_arr* tmp_cells, int* obstacles);
+int accelerate_flow(const t_param params, t_speed_arr* cells, int* obstacles);
+int propagate_and_rebound(const t_param params, t_speed_arr* cells, t_speed_arr* tmp_cells,int* obstacles);
+int rebound(const t_param params, t_speed_arr* cells, t_speed_arr* tmp_cells, int* obstacles);
 // float calc_equilibrium_density(float w,float local_density, float c_sq,float u_sq,float u,float a,float b);
-int collision(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles);
+int collision(const t_param params, t_speed_arr* cells, t_speed_arr* tmp_cells, int* obstacles);
 int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
 
 /* finalise, including freeing up allocated memory */
@@ -120,7 +120,7 @@ int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr
 float total_density(const t_param params, t_speed* cells);
 
 /* compute average velocity */
-float av_velocity(const t_param params, t_speed* cells, int* obstacles);
+float av_velocity(const t_param params, t_speed_arr* cells, int* obstacles);
 
 /* calculate Reynolds number */
 float calc_reynolds(const t_param params, t_speed* cells, int* obstacles);
@@ -220,8 +220,8 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    timestep(params, cells, tmp_cells, obstacles);
-    av_vels[tt] = av_velocity(params, cells, obstacles);
+    timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
+    av_vels[tt] = av_velocity(params, &cells_arr, obstacles);
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
     printf("av velocity: %.12E\n", av_vels[tt]);
@@ -249,16 +249,16 @@ int main(int argc, char* argv[])
   return EXIT_SUCCESS;
 }
 
-int timestep(const t_param params, t_speed* cells, t_speed* tmp_cells, int* obstacles)
+int timestep(const t_param params, t_speed_arr* cells_arr, t_speed_arr* tmp_cells_arr, int* obstacles)
 {
-  accelerate_flow(params, cells, obstacles);
-  propagate_and_rebound(params, cells, tmp_cells,obstacles);
+  accelerate_flow(params, cells_arr, obstacles);
+  propagate_and_rebound(params, cells_arr, tmp_cells_arr,obstacles);
   // rebound(params, cells, tmp_cells, obstacles);
-  collision(params, cells, tmp_cells, obstacles);
+  collision(params, cells_arr, tmp_cells_arr, obstacles);
   return EXIT_SUCCESS;
 }
 
-int accelerate_flow(const t_param params, t_speed* cells, int* obstacles)
+int accelerate_flow(const t_param params, t_speed_arr* cells, int* obstacles)
 {
   /* compute weighting factors */
   float w1 = params.density * params.accel / 9.f;
@@ -272,15 +272,17 @@ int accelerate_flow(const t_param params, t_speed* cells, int* obstacles)
   {
     /* if the cell is not occupied and
     ** we don't send a negative density */
-    if (!obstacles[ii + jj*params.nx]
-        && (cells[ii + jj*params.nx].speeds[3] - w1) > 0.f
-        && (cells[ii + jj*params.nx].speeds[6] - w2) > 0.f
-        && (cells[ii + jj*params.nx].speeds[7] - w2) > 0.f)
-    {
+    // if (!obstacles[ii + jj*params.nx]
+    //     && (cells[ii + jj*params.nx].speeds[3] - w1) > 0.f
+    //     && (cells[ii + jj*params.nx].speeds[6] - w2) > 0.f
+    //     && (cells[ii + jj*params.nx].speeds[7] - w2) > 0.f)
+    // {
+    if(true){
+      int index = ii + jj*params.nx;
       /* increase 'east-side' densities */
-      cells[ii + jj*params.nx].speeds[1] += w1;
-      cells[ii + jj*params.nx].speeds[5] += w2;
-      cells[ii + jj*params.nx].speeds[8] += w2;
+      cells->speedsE[index] += w1;
+      cells->speedsNE[index] += w2;
+      cells->speedsSE[index] += w2;
       /* decrease 'west-side' densities */
       cells[ii + jj*params.nx].speeds[3] -= w1;
       cells[ii + jj*params.nx].speeds[6] -= w2;
