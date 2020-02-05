@@ -224,6 +224,8 @@ int main(int argc, char* argv[])
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
 
+
+
   for (int tt = 0; tt < params.maxIters; tt++)
   {
     timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
@@ -234,6 +236,7 @@ int main(int argc, char* argv[])
     printf("tot density: %.12E\n", total_density(params, &cells_arr));
 #endif
   }
+
 
   gettimeofday(&timstr, NULL);
   toc = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
