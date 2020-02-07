@@ -3,7 +3,7 @@
 EXE=d2q9-bgk
 
 CC=icc
-CFLAGS= -std=c99 -Wall -Ofast -qopt-report=5 
+CFLAGS= -std=c99 -Wall -Ofast -xAVX
 LIBS = -lm
 
 FINAL_STATE_FILE=./final_state.dat
