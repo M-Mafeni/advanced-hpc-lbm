@@ -258,7 +258,7 @@ int main(int argc, char* argv[])
   //copy values back into cells
   for (int jj = 0; jj < params.ny; jj++)
   {
-    #pragma ivdep
+    #pragma omp simd
     for (int ii = 0; ii < params.nx; ii++)
     {
       int index =ii + jj*params.nx;
@@ -327,7 +327,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  const int jj = params.ny - 2;
 
  //PUT OPENMP FOR Pragma here?
- #pragma ivdep
+ #pragma omp simd
   for (int ii = 0; ii < params.nx; ii++)
   {
     int index = ii + jj*params.nx;
@@ -372,7 +372,6 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
   __assume((params.ny)%2==0);
   //propagation needs neighbouring cells
   //halo exchange?
-  //swap for loops
   // const float c_sq = 1.f / 3.f; /* square of speed of sound */
   // const float w0 = 4.f / 9.f;  /* weighting factor */
   // const float w1 = 1.f / 9.f;  /* weighting factor */
@@ -380,7 +379,7 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
   /* loop over _all_ cells */
   for (int jj = 0; jj < params.ny; jj++)
   {
-    #pragma ivdep
+    #pragma omp simd
     for (int ii = 0; ii < params.nx; ii++)
     {
       __assume_aligned(tmp_cells->speeds0, 64);
@@ -470,6 +469,7 @@ int rebound_and_collision(const t_param params, t_speed_arr* __restrict__ cells,
   ** are in the scratch-space grid */
   for (int jj = 0; jj < params.ny; jj++)
   {
+    #pragma omp simd
     for (int ii = 0; ii < params.nx; ii++)
     {
       int index = ii + jj*params.nx;
@@ -591,6 +591,7 @@ float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __
   /* loop over all non-blocked cells */
   for (int jj = 0; jj < params.ny; jj++)
   {
+    #pragma omp simd
     for (int ii = 0; ii < params.nx; ii++)
     {
       /* ignore occupied cells */
