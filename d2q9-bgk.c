@@ -106,10 +106,9 @@ int initialise(const char* paramfile, const char* obstaclefile,
 ** timestep calls, in order, the functions:
 ** accelerate_flow(), propagate(), rebound() & collision()
 */
-int timestep(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
+float timestep(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles);
-int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles);
-int rebound_and_collision(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
+float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles);
 // float calc_equilibrium_density(float w,float local_density, float c_sq,float u_sq,float u,float a,float b);
 int collision(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
 int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
@@ -230,18 +229,18 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    if(tt%2 == 1){
-        timestep(params, &tmp_cells_arr, &cells_arr, obstacles);
-        av_vels[tt] = av_velocity(params, &cells_arr, obstacles);
-    }else{
-        timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
-        av_vels[tt] = av_velocity(params, &tmp_cells_arr, obstacles);
-    }
-    // timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
+    // if(tt%2 == 1){
+    //     timestep(params, &tmp_cells_arr, &cells_arr, obstacles);
+    //     av_vels[tt] = av_velocity(params, &cells_arr, obstacles);
+    // }else{
+    //     timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
+    //     av_vels[tt] = av_velocity(params, &tmp_cells_arr, obstacles);
+    // }
+    av_vels[tt] = timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
     // av_vels[tt] = av_velocity(params, &tmp_cells_arr, obstacles);
-    // t_speed_arr p = cells_arr;
-    // cells_arr = tmp_cells_arr;
-    // tmp_cells_arr = p;
+    t_speed_arr p = cells_arr;
+    cells_arr = tmp_cells_arr;
+    tmp_cells_arr = p;
 
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
@@ -297,7 +296,7 @@ int main(int argc, char* argv[])
   return EXIT_SUCCESS;
 }
 
-int timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_speed_arr* __restrict__ tmp_cells_arr, int* __restrict__ obstacles)
+float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_speed_arr* __restrict__ tmp_cells_arr, int* __restrict__ obstacles)
 {
   __assume_aligned(tmp_cells_arr->speeds0, 64);
   __assume_aligned(tmp_cells_arr->speedsN, 64);
@@ -319,10 +318,10 @@ int timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_speed_
   // __assume_aligned(cells_arr->speedsSW, 64);
   __assume_aligned(cells_arr->speedsSE, 64);
   accelerate_flow(params, cells_arr, obstacles);
-  propagate(params, cells_arr, tmp_cells_arr,obstacles);
+
   // rebound(params, cells, tmp_cells, obstacles);
-  //rebound_and_collision(params, cells_arr, tmp_cells_arr, obstacles);
-  return EXIT_SUCCESS;
+ // rebound_and_collision(params, cells_arr, tmp_cells_arr, obstacles);
+  return propagate(params, cells_arr, tmp_cells_arr,obstacles);;
 }
 
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles)
@@ -371,7 +370,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
   return EXIT_SUCCESS;
 }
 
-int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles)
+float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles)
 {
 
 
@@ -408,6 +407,12 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
   const float w2 = 1.f / 36.f; /* weighting factor */
   const float b = (2* c_sq * c_sq);
   const float d = 2 * c_sq;
+
+  int    tot_cells = 0;  /* no. of cells used in calculation */
+  float tot_u;          /* accumulated magnitudes of velocity for each cell */
+
+  /* initialise */
+  tot_u = 0.f;
 
 
 
@@ -453,7 +458,7 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
           tmp_cells->speedsNW[index] = cells->speedsNW[x_e + y_s*params.nx]; /* north-west */
           tmp_cells->speedsSW[index] = cells->speedsSW[x_e + y_n*params.nx]; /* south-west */
           tmp_cells->speedsSE[index] = cells->speedsSE[x_w + y_n*params.nx]; /* south-east */
-          /* compute local density total */
+          // /* compute local density total */
           float local_density = 0.f;
           local_density += tmp_cells->speeds0[index];
           local_density += tmp_cells->speedsN[index];
@@ -494,7 +499,6 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
           u[6] = - u_x + u_y;  /* north-west */
           u[7] = - u_x - u_y;  /* south-west */
           u[8] =   u_x - u_y;  /* south-east */
-          // float a = u_sq/(2.f * c_sq);
 
            float e = c_sq * u_sq;
             /* equilibrium densities */
@@ -502,10 +506,6 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
             /* zero velocity density: weight w0 */
             d_equ[0] = w0 * local_density
                        * (1.f - u_sq/(2.f * c_sq) );
-            //TODO ASK WHY THIS SLOWS IT DOWN
-            // float axis_weight = w1 * local_density;
-            // float diag_weight = w2 * local_density;
-            /* axis speeds: weight w1 */
 
             d_equ[1] = w1 * local_density * ((b + d * u[1] + u[1] * u[1] - e) /b);
             d_equ[2] = w1 * local_density * ((b + d * u[2] + u[2] * u[2] - e) /b);
@@ -517,17 +517,21 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
             d_equ[7] = w2 * local_density * ((b + d * u[7] + u[7] * u[7] - e) /b);
             d_equ[8] = w2 * local_density * ((b + d * u[8] + u[8] * u[8] - e) /b);
 
-          /* relaxation step */
+            //values for av vel
+            local_density += params.omega *
+            (d_equ[0] + d_equ[1] +  d_equ[2] + d_equ[3] + d_equ[4]+ d_equ[5]+ d_equ[6] + d_equ[7] + d_equ[8]
+                 - tmp_cells->speeds0[index] -tmp_cells->speedsE[index] - tmp_cells->speedsN[index] - tmp_cells->speedsW[index]
+             - tmp_cells->speedsS[index] - tmp_cells->speedsNE[index] - tmp_cells->speedsNW[index]-tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
 
-          // cells->speeds0[index] = tmp_cells->speeds0[index] + params.omega * (d_equ[0] - tmp_cells->speeds0[index]);
-          // cells->speedsE[index] = tmp_cells->speedsE[index] + params.omega * (d_equ[1] - tmp_cells->speedsE[index]);
-          // cells->speedsN[index] = tmp_cells->speedsN[index] + params.omega * (d_equ[2] - tmp_cells->speedsN[index]);
-          // cells->speedsW[index] = tmp_cells->speedsW[index] + params.omega * (d_equ[3] - tmp_cells->speedsW[index]);
-          // cells->speedsS[index] = tmp_cells->speedsS[index] + params.omega * (d_equ[4] - tmp_cells->speedsS[index]);
-          // cells->speedsNE[index] = tmp_cells->speedsNE[index] + params.omega * (d_equ[5] - tmp_cells->speedsNE[index]);
-          // cells->speedsNW[index] = tmp_cells->speedsNW[index] + params.omega * (d_equ[6] - tmp_cells->speedsNW[index]);
-          // cells->speedsSW[index] = tmp_cells->speedsSW[index] + params.omega * (d_equ[7] - tmp_cells->speedsSW[index]);
-          // cells->speedsSE[index] = tmp_cells->speedsSE[index] + params.omega * (d_equ[8] - tmp_cells->speedsSE[index]);
+             u_x += params.omega * (d_equ[1]+ d_equ[5] + d_equ[8] -d_equ[3] - d_equ[6] -d_equ[7]
+                 -tmp_cells->speedsE[index] +tmp_cells->speedsW[index]
+             - tmp_cells->speedsNE[index] +tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
+
+             u_y += params.omega *
+             (d_equ[2] - d_equ[4]+ d_equ[5]+ d_equ[6] - d_equ[7] - d_equ[8]
+                  - tmp_cells->speedsN[index] + tmp_cells->speedsS[index] - tmp_cells->speedsNE[index]
+                  - tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] +tmp_cells->speedsSE[index]);
+          /* relaxation step */
 
           tmp_cells->speeds0[index] = tmp_cells->speeds0[index] + params.omega * (d_equ[0] - tmp_cells->speeds0[index]);
           tmp_cells->speedsE[index] = tmp_cells->speedsE[index] + params.omega * (d_equ[1] - tmp_cells->speedsE[index]);
@@ -538,160 +542,18 @@ int propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr
           tmp_cells->speedsNW[index] = tmp_cells->speedsNW[index] + params.omega * (d_equ[6] - tmp_cells->speedsNW[index]);
           tmp_cells->speedsSW[index] = tmp_cells->speedsSW[index] + params.omega * (d_equ[7] - tmp_cells->speedsSW[index]);
           tmp_cells->speedsSE[index] = tmp_cells->speedsSE[index] + params.omega * (d_equ[8] - tmp_cells->speedsSE[index]);
+
+          /* accumulate the norm of x- and y- velocity components */
+          tot_u += sqrtf((u_x * u_x) + (u_y * u_y));
+          /* increase counter of inspected cells */
+          ++tot_cells;
       }
     }
   }
 
-  return EXIT_SUCCESS;
+  return tot_u / (float)tot_cells;
 }
 
-
-int rebound_and_collision(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles)
-{
-
-
-  __assume((params.nx)%2==0);
-  __assume((params.ny)%2==0);
-
-  //
-  const float c_sq = 1.f / 3.f; /* square of speed of sound */
-  const float w0 = 4.f / 9.f;  /* weighting factor */
-  const float w1 = 1.f / 9.f;  /* weighting factor */
-  const float w2 = 1.f / 36.f; /* weighting factor */
-  const float b = (2* c_sq * c_sq);
-  const float d = 2 * c_sq;
-
-
-
-
-  float *d_equ = (float*)_mm_malloc(sizeof(float) * NSPEEDS,64);
-  float *u     = (float*)_mm_malloc(sizeof(float) * NSPEEDS,64);
-  __assume_aligned(tmp_cells->speeds0, 64);
-  __assume_aligned(tmp_cells->speedsN, 64);
-  __assume_aligned(tmp_cells->speedsS, 64);
-  __assume_aligned(tmp_cells->speedsE, 64);
-  __assume_aligned(tmp_cells->speedsW, 64);
-  __assume_aligned(tmp_cells->speedsNW, 64);
-  __assume_aligned(tmp_cells->speedsNE, 64);
-  __assume_aligned(tmp_cells->speedsSW, 64);
-  __assume_aligned(tmp_cells->speedsSE, 64);
-
-  __assume_aligned(cells->speeds0, 64);
-  __assume_aligned(cells->speedsN, 64);
-  __assume_aligned(cells->speedsS, 64);
-  __assume_aligned(cells->speedsE, 64);
-  __assume_aligned(cells->speedsW, 64);
-  __assume_aligned(cells->speedsNW, 64);
-  __assume_aligned(cells->speedsNE, 64);
-  __assume_aligned(cells->speedsSW, 64);
-  __assume_aligned(cells->speedsSE, 64);
-
-  __assume_aligned(d_equ,64);
-  __assume_aligned(u,64);
-
-  /* loop over the cells in the grid
-  ** NB the collision step is called after
-  ** the propagate step and so values of interest
-  ** are in the scratch-space grid */
-  for (int jj = 0; jj < params.ny; jj++)
-  {
-    #pragma omp simd
-    for (int ii = 0; ii < params.nx; ii++)
-    {
-      int index = ii + jj*params.nx;
-      if(!obstacles[jj*params.nx + ii])
-      {
-        /* compute local density total */
-        float local_density = 0.f;
-        local_density += tmp_cells->speeds0[index];
-        local_density += tmp_cells->speedsN[index];
-        local_density += tmp_cells->speedsS[index];
-        local_density += tmp_cells->speedsW[index];
-        local_density += tmp_cells->speedsE[index];
-        local_density += tmp_cells->speedsNW[index];
-        local_density += tmp_cells->speedsNE[index];
-        local_density += tmp_cells->speedsSW[index];
-        local_density += tmp_cells->speedsSE[index];
-        /* compute x velocity component */
-        float u_x = (tmp_cells->speedsE[index]
-                      + tmp_cells->speedsNE[index]
-                      + tmp_cells->speedsSE[index]
-                      - (tmp_cells->speedsW[index]
-                         + tmp_cells->speedsNW[index]
-                         + tmp_cells->speedsSW[index])  )
-                     / local_density;
-        /* compute y velocity component */
-        float u_y = (tmp_cells->speedsN[index]
-                      + tmp_cells->speedsNE[index]
-                      + tmp_cells->speedsNW[index]
-                      - (tmp_cells->speedsS[index]
-                         + tmp_cells->speedsSW[index]
-                         + tmp_cells->speedsSE[index]) )
-                     / local_density;
-
-        /* velocity squared */
-        float u_sq = u_x * u_x + u_y * u_y;
-
-        /* directional velocity components */
-        // float u[NSPEEDS];
-        u[1] =   u_x;        /* east */
-        u[2] =         u_y;  /* north */
-        u[3] = - u_x;        /* west */
-        u[4] =       - u_y;  /* south */
-        u[5] =   u_x + u_y;  /* north-east */
-        u[6] = - u_x + u_y;  /* north-west */
-        u[7] = - u_x - u_y;  /* south-west */
-        u[8] =   u_x - u_y;  /* south-east */
-        // float a = u_sq/(2.f * c_sq);
-
-         float e = c_sq * u_sq;
-          /* equilibrium densities */
-
-          /* zero velocity density: weight w0 */
-          d_equ[0] = w0 * local_density
-                     * (1.f - u_sq/(2.f * c_sq) );
-          //TODO ASK WHY THIS SLOWS IT DOWN
-          // float axis_weight = w1 * local_density;
-          // float diag_weight = w2 * local_density;
-          /* axis speeds: weight w1 */
-
-          d_equ[1] = w1 * local_density * ((b + d * u[1] + u[1] * u[1] - e) /b);
-          d_equ[2] = w1 * local_density * ((b + d * u[2] + u[2] * u[2] - e) /b);
-          d_equ[3] = w1 * local_density * ((b + d * u[3] + u[3] * u[3] - e) /b);
-          d_equ[4] = w1 * local_density * ((b + d * u[4] + u[4] * u[4] - e) /b);
-          /* diagonal speeds: weight w2 */
-          d_equ[5] = w2 * local_density * ((b + d * u[5] + u[5] * u[5] - e) /b);
-          d_equ[6] = w2 * local_density * ((b + d * u[6] + u[6] * u[6] - e) /b);
-          d_equ[7] = w2 * local_density * ((b + d * u[7] + u[7] * u[7] - e) /b);
-          d_equ[8] = w2 * local_density * ((b + d * u[8] + u[8] * u[8] - e) /b);
-
-        /* relaxation step */
-
-        // cells->speeds0[index] = tmp_cells->speeds0[index] + params.omega * (d_equ[0] - tmp_cells->speeds0[index]);
-        // cells->speedsE[index] = tmp_cells->speedsE[index] + params.omega * (d_equ[1] - tmp_cells->speedsE[index]);
-        // cells->speedsN[index] = tmp_cells->speedsN[index] + params.omega * (d_equ[2] - tmp_cells->speedsN[index]);
-        // cells->speedsW[index] = tmp_cells->speedsW[index] + params.omega * (d_equ[3] - tmp_cells->speedsW[index]);
-        // cells->speedsS[index] = tmp_cells->speedsS[index] + params.omega * (d_equ[4] - tmp_cells->speedsS[index]);
-        // cells->speedsNE[index] = tmp_cells->speedsNE[index] + params.omega * (d_equ[5] - tmp_cells->speedsNE[index]);
-        // cells->speedsNW[index] = tmp_cells->speedsNW[index] + params.omega * (d_equ[6] - tmp_cells->speedsNW[index]);
-        // cells->speedsSW[index] = tmp_cells->speedsSW[index] + params.omega * (d_equ[7] - tmp_cells->speedsSW[index]);
-        // cells->speedsSE[index] = tmp_cells->speedsSE[index] + params.omega * (d_equ[8] - tmp_cells->speedsSE[index]);
-
-        tmp_cells->speeds0[index] = tmp_cells->speeds0[index] + params.omega * (d_equ[0] - tmp_cells->speeds0[index]);
-        tmp_cells->speedsE[index] = tmp_cells->speedsE[index] + params.omega * (d_equ[1] - tmp_cells->speedsE[index]);
-        tmp_cells->speedsN[index] = tmp_cells->speedsN[index] + params.omega * (d_equ[2] - tmp_cells->speedsN[index]);
-        tmp_cells->speedsW[index] = tmp_cells->speedsW[index] + params.omega * (d_equ[3] - tmp_cells->speedsW[index]);
-        tmp_cells->speedsS[index] = tmp_cells->speedsS[index] + params.omega * (d_equ[4] - tmp_cells->speedsS[index]);
-        tmp_cells->speedsNE[index] = tmp_cells->speedsNE[index] + params.omega * (d_equ[5] - tmp_cells->speedsNE[index]);
-        tmp_cells->speedsNW[index] = tmp_cells->speedsNW[index] + params.omega * (d_equ[6] - tmp_cells->speedsNW[index]);
-        tmp_cells->speedsSW[index] = tmp_cells->speedsSW[index] + params.omega * (d_equ[7] - tmp_cells->speedsSW[index]);
-        tmp_cells->speedsSE[index] = tmp_cells->speedsSE[index] + params.omega * (d_equ[8] - tmp_cells->speedsSE[index]);
-      }
-    }
-  }
-
-  return EXIT_SUCCESS;
-}
 
 float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles)
 {
