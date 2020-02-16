@@ -183,6 +183,24 @@ int main(int argc, char* argv[])
   float* tmp_speedsNE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
   float* tmp_speedsSW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
   float* tmp_speedsSE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
+  __assume_aligned(tmp_speeds0, 64);
+  __assume_aligned(tmp_speedsN, 64);
+  __assume_aligned(tmp_speedsS, 64);
+  __assume_aligned(tmp_speedsE, 64);
+  __assume_aligned(tmp_speedsW, 64);
+  __assume_aligned(tmp_speedsNW, 64);
+  __assume_aligned(tmp_speedsNE, 64);
+  __assume_aligned(tmp_speedsSW, 64);
+  __assume_aligned(tmp_speedsSE, 64);
+
+  __assume_aligned(speeds0, 64);
+  __assume_aligned(speedsN, 64);
+  __assume_aligned(speedsS, 64);
+  __assume_aligned(speedsE, 64);
+  __assume_aligned(speedsW, 64);
+  __assume_aligned(speedsNW, 64);
+  __assume_aligned(speedsNE, 64);
+  __assume_aligned(speedsSW, 64);
   for (int jj = 0; jj < params.ny; jj++)
   {
     for (int ii = 0; ii < params.nx; ii++)
@@ -221,6 +239,8 @@ int main(int argc, char* argv[])
 
   t_speed_arr cells_arr = {speeds0,speedsN,speedsS,speedsW,speedsE,
     speedsNW,speedsNE,speedsSW,speedsSE};
+    t_speed_arr* cells_arr_ptr = &cells_arr;
+    t_speed_arr* tmp_cells_arr_ptr = &tmp_cells_arr;
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
@@ -229,29 +249,17 @@ int main(int argc, char* argv[])
 
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    // if(tt%2 == 1){
-    //     timestep(params, &tmp_cells_arr, &cells_arr, obstacles);
-    //     av_vels[tt] = av_velocity(params, &cells_arr, obstacles);
-    // }else{
-    //     timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
-    //     av_vels[tt] = av_velocity(params, &tmp_cells_arr, obstacles);
-    // }
-    av_vels[tt] = timestep(params, &cells_arr, &tmp_cells_arr, obstacles);
-    // av_vels[tt] = av_velocity(params, &tmp_cells_arr, obstacles);
-    t_speed_arr p = cells_arr;
-    cells_arr = tmp_cells_arr;
-    tmp_cells_arr = p;
+    av_vels[tt] = timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
+    // timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
+    // av_vels[tt] = av_velocity(params, tmp_cells_arr_ptr, obstacles);
+    t_speed_arr* p = cells_arr_ptr;
+    cells_arr_ptr = tmp_cells_arr_ptr;
+    tmp_cells_arr_ptr = p;
 
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
     printf("av velocity: %.12E\n", av_vels[tt]);
-    if(tt%2 == 1){
-        printf("tot density: %.12E\n", total_density(params, &cells_arr));
-
-    }else{
-        printf("tot density: %.12E\n", total_density(params, &tmp_cells_arr));
-
-    }
+    printf("tot density: %.12E\n", total_density(params, &cells_arr));
 #endif
   }
 
@@ -276,6 +284,8 @@ int main(int argc, char* argv[])
   for (int jj = 0; jj < params.ny; jj++)
   {
     #pragma omp simd
+    #pragma vector aligned
+
     for (int ii = 0; ii < params.nx; ii++)
     {
       int index =ii + jj*params.nx;
@@ -298,25 +308,25 @@ int main(int argc, char* argv[])
 
 float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_speed_arr* __restrict__ tmp_cells_arr, int* __restrict__ obstacles)
 {
-  __assume_aligned(tmp_cells_arr->speeds0, 64);
-  __assume_aligned(tmp_cells_arr->speedsN, 64);
-  __assume_aligned(tmp_cells_arr->speedsS, 64);
-  __assume_aligned(tmp_cells_arr->speedsE, 64);
-  __assume_aligned(tmp_cells_arr->speedsW, 64);
-  __assume_aligned(tmp_cells_arr->speedsNW, 64);
-  __assume_aligned(tmp_cells_arr->speedsNE, 64);
-  __assume_aligned(tmp_cells_arr->speedsSW, 64);
-  __assume_aligned(tmp_cells_arr->speedsSE, 64);
-
-  // __assume_aligned(cells_arr->speeds0, 64);
-  // __assume_aligned(cells_arr->speedsN, 64);
-  // __assume_aligned(cells_arr->speedsS, 64);
-  // __assume_aligned(cells_arr->speedsE, 64);
-  // __assume_aligned(cells_arr->speedsW, 64);
-  // __assume_aligned(cells_arr->speedsNW, 64);
-  // __assume_aligned(cells_arr->speedsNE, 64);
-  // __assume_aligned(cells_arr->speedsSW, 64);
-  __assume_aligned(cells_arr->speedsSE, 64);
+  // __assume_aligned(tmp_cells_arr->speeds0, 64);
+  // __assume_aligned(tmp_cells_arr->speedsN, 64);
+  // __assume_aligned(tmp_cells_arr->speedsS, 64);
+  // __assume_aligned(tmp_cells_arr->speedsE, 64);
+  // __assume_aligned(tmp_cells_arr->speedsW, 64);
+  // __assume_aligned(tmp_cells_arr->speedsNW, 64);
+  // __assume_aligned(tmp_cells_arr->speedsNE, 64);
+  // __assume_aligned(tmp_cells_arr->speedsSW, 64);
+  // __assume_aligned(tmp_cells_arr->speedsSE, 64);
+  //
+  // // __assume_aligned(cells_arr->speeds0, 64);
+  // // __assume_aligned(cells_arr->speedsN, 64);
+  // // __assume_aligned(cells_arr->speedsS, 64);
+  // // __assume_aligned(cells_arr->speedsE, 64);
+  // // __assume_aligned(cells_arr->speedsW, 64);
+  // // __assume_aligned(cells_arr->speedsNW, 64);
+  // // __assume_aligned(cells_arr->speedsNE, 64);
+  // // __assume_aligned(cells_arr->speedsSW, 64);
+  // __assume_aligned(cells_arr->speedsSE, 64);
   accelerate_flow(params, cells_arr, obstacles);
 
   // rebound(params, cells, tmp_cells, obstacles);
@@ -326,16 +336,7 @@ float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_spee
 
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles)
 {
-  // __assume_aligned(cells->speeds0, 64);
-  // __assume_aligned(cells->speedsN, 64);
-  // __assume_aligned(cells->speedsS, 64);
-  // __assume_aligned(cells->speedsE, 64);
-  // __assume_aligned(cells->speedsW, 64);
-  // __assume_aligned(cells->speedsNW, 64);
-  // __assume_aligned(cells->speedsNE, 64);
-  // __assume_aligned(cells->speedsSW, 64);
-  // __assume_aligned(cells->speedsSE, 64);
-  __assume((params.nx)%2==0);
+
   /* compute weighting factors */
   const float w1 = params.density * params.accel / 9.f;
   const float w2 = params.density * params.accel / 36.f;
@@ -344,7 +345,18 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  const int jj = params.ny - 2;
 
  //PUT OPENMP FOR Pragma here?
+ __assume_aligned(cells->speeds0, 64);
+ __assume_aligned(cells->speedsN, 64);
+ __assume_aligned(cells->speedsS, 64);
+ __assume_aligned(cells->speedsE, 64);
+ __assume_aligned(cells->speedsW, 64);
+ __assume_aligned(cells->speedsNW, 64);
+ __assume_aligned(cells->speedsNE, 64);
+ __assume_aligned(cells->speedsSW, 64);
+ __assume_aligned(cells->speedsSE, 64);
+ __assume((params.nx)%2==0);
  #pragma omp simd
+ #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
     int index = ii + jj*params.nx;
@@ -374,29 +386,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
 {
 
 
-  __assume_aligned(cells->speeds0, 64);
-  __assume_aligned(cells->speedsN, 64);
-  __assume_aligned(cells->speedsS, 64);
-  __assume_aligned(cells->speedsE, 64);
-  __assume_aligned(cells->speedsW, 64);
-  __assume_aligned(cells->speedsNW, 64);
-  __assume_aligned(cells->speedsNE, 64);
-  __assume_aligned(cells->speedsSW, 64);
-  __assume_aligned(cells->speedsSE, 64);
 
-  __assume_aligned(tmp_cells->speeds0, 64);
-  __assume_aligned(tmp_cells->speedsN, 64);
-  __assume_aligned(tmp_cells->speedsS, 64);
-  __assume_aligned(tmp_cells->speedsE, 64);
-  __assume_aligned(tmp_cells->speedsW, 64);
-  __assume_aligned(tmp_cells->speedsNW, 64);
-  __assume_aligned(tmp_cells->speedsNE, 64);
-  __assume_aligned(tmp_cells->speedsSW, 64);
-  __assume_aligned(tmp_cells->speedsSE, 64);
-    // __assume_aligned(cells,64);
-    // __assume_aligned(tmp_cells,64);
-  __assume((params.nx)%2==0);
-  __assume((params.ny)%2==0);
   //propagation needs neighbouring cells
   //halo exchange?
 
@@ -423,6 +413,29 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   __assume_aligned(d_equ,64);
   __assume_aligned(u,64);
   /* loop over _all_ cells */
+  __assume_aligned(cells->speeds0, 64);
+  __assume_aligned(cells->speedsN, 64);
+  __assume_aligned(cells->speedsS, 64);
+  __assume_aligned(cells->speedsE, 64);
+  __assume_aligned(cells->speedsW, 64);
+  __assume_aligned(cells->speedsNW, 64);
+  __assume_aligned(cells->speedsNE, 64);
+  __assume_aligned(cells->speedsSW, 64);
+  __assume_aligned(cells->speedsSE, 64);
+
+  __assume_aligned(tmp_cells->speeds0, 64);
+  __assume_aligned(tmp_cells->speedsN, 64);
+  __assume_aligned(tmp_cells->speedsS, 64);
+  __assume_aligned(tmp_cells->speedsE, 64);
+  __assume_aligned(tmp_cells->speedsW, 64);
+  __assume_aligned(tmp_cells->speedsNW, 64);
+  __assume_aligned(tmp_cells->speedsNE, 64);
+  __assume_aligned(tmp_cells->speedsSW, 64);
+  __assume_aligned(tmp_cells->speedsSE, 64);
+    // __assume_aligned(cells,64);
+    // __assume_aligned(tmp_cells,64);
+  __assume((params.nx)%64==0);
+  __assume((params.ny)%64==0);
   for (int jj = 0; jj < params.ny; jj++)
   {
     #pragma omp simd
@@ -516,21 +529,24 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
             d_equ[6] = w2 * local_density * ((b + d * u[6] + u[6] * u[6] - e) /b);
             d_equ[7] = w2 * local_density * ((b + d * u[7] + u[7] * u[7] - e) /b);
             d_equ[8] = w2 * local_density * ((b + d * u[8] + u[8] * u[8] - e) /b);
-
+            // u_x *= local_density;
+            // u_y *= local_density;
             //values for av vel
-            local_density += params.omega *
-            (d_equ[0] + d_equ[1] +  d_equ[2] + d_equ[3] + d_equ[4]+ d_equ[5]+ d_equ[6] + d_equ[7] + d_equ[8]
-                 - tmp_cells->speeds0[index] -tmp_cells->speedsE[index] - tmp_cells->speedsN[index] - tmp_cells->speedsW[index]
-             - tmp_cells->speedsS[index] - tmp_cells->speedsNE[index] - tmp_cells->speedsNW[index]-tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
-
-             u_x += params.omega * (d_equ[1]+ d_equ[5] + d_equ[8] -d_equ[3] - d_equ[6] -d_equ[7]
-                 -tmp_cells->speedsE[index] +tmp_cells->speedsW[index]
-             - tmp_cells->speedsNE[index] +tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
-
-             u_y += params.omega *
-             (d_equ[2] - d_equ[4]+ d_equ[5]+ d_equ[6] - d_equ[7] - d_equ[8]
-                  - tmp_cells->speedsN[index] + tmp_cells->speedsS[index] - tmp_cells->speedsNE[index]
-                  - tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] +tmp_cells->speedsSE[index]);
+            // local_density += params.omega *
+            // (d_equ[0] + d_equ[1] +  d_equ[2] + d_equ[3] + d_equ[4]+ d_equ[5]+ d_equ[6] + d_equ[7] + d_equ[8]
+            //      - tmp_cells->speeds0[index] -tmp_cells->speedsE[index] - tmp_cells->speedsN[index] - tmp_cells->speedsW[index]
+            //  - tmp_cells->speedsS[index] - tmp_cells->speedsNE[index] - tmp_cells->speedsNW[index]-tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
+            //
+            //  u_x += params.omega * (d_equ[1]+ d_equ[5] + d_equ[8] -d_equ[3] - d_equ[6] -d_equ[7]
+            //      -tmp_cells->speedsE[index] +tmp_cells->speedsW[index]
+            //  - tmp_cells->speedsNE[index] +tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] -tmp_cells->speedsSE[index]);
+            //  u_x /= local_density;
+            //
+            //  u_y += params.omega *
+            //  (d_equ[2] - d_equ[4]+ d_equ[5]+ d_equ[6] - d_equ[7] - d_equ[8]
+            //       - tmp_cells->speedsN[index] + tmp_cells->speedsS[index] - tmp_cells->speedsNE[index]
+            //       - tmp_cells->speedsNW[index]+tmp_cells->speedsSW[index] +tmp_cells->speedsSE[index]);
+            // u_y /= local_density;
           /* relaxation step */
 
           tmp_cells->speeds0[index] = tmp_cells->speeds0[index] + params.omega * (d_equ[0] - tmp_cells->speeds0[index]);
@@ -543,6 +559,22 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
           tmp_cells->speedsSW[index] = tmp_cells->speedsSW[index] + params.omega * (d_equ[7] - tmp_cells->speedsSW[index]);
           tmp_cells->speedsSE[index] = tmp_cells->speedsSE[index] + params.omega * (d_equ[8] - tmp_cells->speedsSE[index]);
 
+          // u_x = (tmp_cells->speedsE[index]
+          //               + tmp_cells->speedsNE[index]
+          //               + tmp_cells->speedsSE[index]
+          //               - (tmp_cells->speedsW[index]
+          //                  + tmp_cells->speedsNW[index]
+          //                  + tmp_cells->speedsSW[index])  )
+          //              / local_density;
+          // /* compute y velocity component */
+          // u_y = (tmp_cells->speedsN[index]
+          //               + tmp_cells->speedsNE[index]
+          //               + tmp_cells->speedsNW[index]
+          //               - (tmp_cells->speedsS[index]
+          //                  + tmp_cells->speedsSW[index]
+          //                  + tmp_cells->speedsSE[index]) )
+          //              / local_density;
+
           /* accumulate the norm of x- and y- velocity components */
           tot_u += sqrtf((u_x * u_x) + (u_y * u_y));
           /* increase counter of inspected cells */
@@ -552,12 +584,18 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   }
 
   return tot_u / (float)tot_cells;
+  // return 0;
 }
 
 
 float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles)
 {
-  //Put ASSUME_ALIGNED HERE
+
+  int    tot_cells = 0;  /* no. of cells used in calculation */
+  float tot_u;          /* accumulated magnitudes of velocity for each cell */
+
+  /* initialise */
+  tot_u = 0.f;
   __assume_aligned(cells->speeds0, 64);
   __assume_aligned(cells->speedsN, 64);
   __assume_aligned(cells->speedsS, 64);
@@ -567,16 +605,11 @@ float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __
   __assume_aligned(cells->speedsNE, 64);
   __assume_aligned(cells->speedsSW, 64);
   __assume_aligned(cells->speedsSE, 64);
-  int    tot_cells = 0;  /* no. of cells used in calculation */
-  float tot_u;          /* accumulated magnitudes of velocity for each cell */
-
-  /* initialise */
-  tot_u = 0.f;
-
   /* loop over all non-blocked cells */
   for (int jj = 0; jj < params.ny; jj++)
   {
     #pragma omp simd
+    #pragma vector aligned
     for (int ii = 0; ii < params.nx; ii++)
     {
       /* ignore occupied cells */
