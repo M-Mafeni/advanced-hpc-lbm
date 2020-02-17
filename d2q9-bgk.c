@@ -243,9 +243,6 @@ int main(int argc, char* argv[])
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
-
-
-
   for (int tt = 0; tt < params.maxIters; tt++)
   {
     av_vels[tt] = timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
@@ -336,7 +333,8 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  __assume_aligned(cells->speedsSW, 64);
  __assume_aligned(cells->speedsSE, 64);
  __assume((params.nx)%128==0);
- #pragma omp simd
+ #pragma omp parallel for simd
+ #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
     int index = ii + jj*params.nx;
@@ -385,7 +383,6 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   /* initialise */
   tot_u = 0.f;
 
-
   /* loop over _all_ cells */
   __assume_aligned(cells->speeds0, 64);
   __assume_aligned(cells->speedsN, 64);
@@ -406,14 +403,13 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   __assume_aligned(tmp_cells->speedsNE, 64);
   __assume_aligned(tmp_cells->speedsSW, 64);
   __assume_aligned(tmp_cells->speedsSE, 64);
-    // __assume_aligned(cells,64);
-    // __assume_aligned(tmp_cells,64);
+
   __assume((params.nx)%128==0);
   __assume((params.ny)%128==0);
 
+  #pragma omp parallel for simd reduction(+:tot_u,tot_cells) collapse(2)
   for (int jj = 0; jj < params.ny; jj++)
   {
-    #pragma omp simd
     for (int ii = 0; ii < params.nx; ii++)
     {
 
