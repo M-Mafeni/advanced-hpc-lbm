@@ -343,19 +343,22 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
 
     /* if the cell is not occupied and
     ** we don't send a negative density */
+    float a = cells->speedsW[index] - w1;
+    float b = cells->speedsNW[index] - w2;
+    float c = cells->speedsSW[index] - w2;
     if (!obstacles[index]
-        && (cells->speedsW[index] - w1) > 0.f
-        && (cells->speedsNW[index] - w2) > 0.f
-        && (cells->speedsSW[index] - w2) > 0.f)
+        && a > 0.f
+        && b > 0.f
+        && c > 0.f)
     {
       /* increase 'east-side' densities */
       cells->speedsE[index] += w1;
       cells->speedsNE[index] += w2;
       cells->speedsSE[index] += w2;
       /* decrease 'west-side' densities */
-      cells->speedsW[index] -= w1;
-      cells->speedsNW[index] -= w2;
-      cells->speedsSW[index] -= w2;
+      cells->speedsW[index] = a;
+      cells->speedsNW[index] = b;
+      cells->speedsSW[index] = c;
     }
   }
 
