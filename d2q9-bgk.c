@@ -161,6 +161,7 @@ int main(int argc, char* argv[])
     obstaclefile = argv[2];
   }
 
+
   /* initialise our data structures and load values from file */
   initialise(paramfile, obstaclefile, &params, &cells, &tmp_cells, &obstacles, &av_vels);
   //initialise temp cells array
@@ -308,25 +309,7 @@ int main(int argc, char* argv[])
 
 float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_speed_arr* __restrict__ tmp_cells_arr, int* __restrict__ obstacles)
 {
-  // __assume_aligned(tmp_cells_arr->speeds0, 64);
-  // __assume_aligned(tmp_cells_arr->speedsN, 64);
-  // __assume_aligned(tmp_cells_arr->speedsS, 64);
-  // __assume_aligned(tmp_cells_arr->speedsE, 64);
-  // __assume_aligned(tmp_cells_arr->speedsW, 64);
-  // __assume_aligned(tmp_cells_arr->speedsNW, 64);
-  // __assume_aligned(tmp_cells_arr->speedsNE, 64);
-  // __assume_aligned(tmp_cells_arr->speedsSW, 64);
-  // __assume_aligned(tmp_cells_arr->speedsSE, 64);
-  //
-  // // __assume_aligned(cells_arr->speeds0, 64);
-  // // __assume_aligned(cells_arr->speedsN, 64);
-  // // __assume_aligned(cells_arr->speedsS, 64);
-  // // __assume_aligned(cells_arr->speedsE, 64);
-  // // __assume_aligned(cells_arr->speedsW, 64);
-  // // __assume_aligned(cells_arr->speedsNW, 64);
-  // // __assume_aligned(cells_arr->speedsNE, 64);
-  // // __assume_aligned(cells_arr->speedsSW, 64);
-  // __assume_aligned(cells_arr->speedsSE, 64);
+
   accelerate_flow(params, cells_arr, obstacles);
 
   // rebound(params, cells, tmp_cells, obstacles);
@@ -354,9 +337,8 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  __assume_aligned(cells->speedsNE, 64);
  __assume_aligned(cells->speedsSW, 64);
  __assume_aligned(cells->speedsSE, 64);
- __assume((params.nx)%2==0);
+ __assume((params.nx)%128==0);
  #pragma omp simd
- #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
     int index = ii + jj*params.nx;
@@ -388,8 +370,6 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
 
 
   //propagation needs neighbouring cells
-  //halo exchange?
-
 
   const float c_sq = 1.f / 3.f; /* square of speed of sound */
   const float w0 = 4.f / 9.f;  /* weighting factor */
@@ -434,8 +414,9 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   __assume_aligned(tmp_cells->speedsSE, 64);
     // __assume_aligned(cells,64);
     // __assume_aligned(tmp_cells,64);
-  __assume((params.nx)%64==0);
-  __assume((params.ny)%64==0);
+  __assume((params.nx)%128==0);
+  __assume((params.ny)%128==0);
+
   for (int jj = 0; jj < params.ny; jj++)
   {
     #pragma omp simd
@@ -576,7 +557,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
           //              / local_density;
 
           /* accumulate the norm of x- and y- velocity components */
-          tot_u += sqrtf((u_x * u_x) + (u_y * u_y));
+          tot_u += sqrtf(u_sq);
           /* increase counter of inspected cells */
           ++tot_cells;
       }
