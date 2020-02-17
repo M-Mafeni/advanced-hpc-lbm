@@ -386,13 +386,6 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   tot_u = 0.f;
 
 
-
-
-  float *d_equ = (float*)_mm_malloc(sizeof(float) * NSPEEDS,64);
-  float *u     = (float*)_mm_malloc(sizeof(float) * NSPEEDS,64);
-
-  __assume_aligned(d_equ,64);
-  __assume_aligned(u,64);
   /* loop over _all_ cells */
   __assume_aligned(cells->speeds0, 64);
   __assume_aligned(cells->speedsN, 64);
@@ -485,7 +478,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
           float u_sq = u_x * u_x + u_y * u_y;
 
           /* directional velocity components */
-          // float u[NSPEEDS];
+          float u[NSPEEDS];
           u[1] =   u_x;        /* east */
           u[2] =         u_y;  /* north */
           u[3] = - u_x;        /* west */
@@ -497,7 +490,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
 
            float e = c_sq * u_sq;
             /* equilibrium densities */
-
+            float d_equ[NSPEEDS];
             /* zero velocity density: weight w0 */
             d_equ[0] = w0 * local_density
                        * (1.f - u_sq/(2.f * c_sq) );
@@ -526,7 +519,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
 
           /* accumulate the norm of x- and y- velocity components */
           tot_u += sqrtf(u_sq);
-          /* increase counter of inspected cells */
+          // /* increase counter of inspected cells */
           ++tot_cells;
       }
     }
