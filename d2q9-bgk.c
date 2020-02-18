@@ -333,7 +333,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  __assume_aligned(cells->speedsSW, 64);
  __assume_aligned(cells->speedsSE, 64);
  __assume((params.nx)%128==0);
- #pragma omp parallel for simd
+ #pragma omp simd
  #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
