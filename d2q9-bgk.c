@@ -260,7 +260,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  __assume_aligned(cells->speedsSW, 64);
  __assume_aligned(cells->speedsSE, 64);
  __assume((params.nx)%128==0);
- #pragma omp simd
+ #pragma omp parallel for simd
  #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
@@ -461,10 +461,11 @@ float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __
   __assume_aligned(cells->speedsSW, 64);
   __assume_aligned(cells->speedsSE, 64);
   /* loop over all non-blocked cells */
+  #pragma omp parallel for simd collapse(2) reduction(+:tot_u,tot_cells)
+  #pragma vector aligned
   for (int jj = 0; jj < params.ny; jj++)
   {
-    #pragma omp simd
-    #pragma vector aligned
+
     for (int ii = 0; ii < params.nx; ii++)
     {
       /* ignore occupied cells */
@@ -750,7 +751,6 @@ int initialise1(const char* paramfile, const char* obstaclefile,
 
         //
         // /* 'helper' grid, used as scratch space */
-        // *tmp_cells_ptr = (t_speed*)malloc(sizeof(t_speed) * (params->ny * params->nx));
         *tmp_cells_ptr = (t_speed_arr*)_mm_malloc(sizeof(t_speed_arr),64);
         if (*tmp_cells_ptr == NULL) die("cannot allocate memory for tmp_cells", __LINE__, __FILE__);
         (*tmp_cells_ptr)->speeds0 = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
@@ -773,34 +773,40 @@ int initialise1(const char* paramfile, const char* obstaclefile,
         float w0 = params->density * 4.f / 9.f;
         float w1 = params->density      / 9.f;
         float w2 = params->density      / 36.f;
-
-        for (int jj = 0; jj < params->ny; jj++)
+        #pragma omp parallel
         {
-          for (int ii = 0; ii < params->nx; ii++)
-          {
-            /* centre */
-            (*cells_ptr)->speeds0[ii + jj*params->nx] = w0;
-          //   /* axis directions */
-            (*cells_ptr)->speedsE[ii + jj*params->nx] = w1;
-            (*cells_ptr)->speedsN[ii + jj*params->nx] = w1;
-            (*cells_ptr)->speedsW[ii + jj*params->nx] = w1;
-            (*cells_ptr)->speedsS[ii + jj*params->nx] = w1;
-          //   /* diagonals */
-            (*cells_ptr)->speedsNE[ii + jj*params->nx] = w2;
-            (*cells_ptr)->speedsNW[ii + jj*params->nx] = w2;
-            (*cells_ptr)->speedsSW[ii + jj*params->nx] = w2;
-            (*cells_ptr)->speedsSE[ii + jj*params->nx] = w2;
-          }
+           #pragma omp for collapse(2) nowait
+           for (int jj = 0; jj < params->ny; jj++)
+           {
+             for (int ii = 0; ii < params->nx; ii++)
+             {
+               /* centre */
+               (*cells_ptr)->speeds0[ii + jj*params->nx] = w0;
+             //   /* axis directions */
+               (*cells_ptr)->speedsE[ii + jj*params->nx] = w1;
+               (*cells_ptr)->speedsN[ii + jj*params->nx] = w1;
+               (*cells_ptr)->speedsW[ii + jj*params->nx] = w1;
+               (*cells_ptr)->speedsS[ii + jj*params->nx] = w1;
+             //   /* diagonals */
+               (*cells_ptr)->speedsNE[ii + jj*params->nx] = w2;
+               (*cells_ptr)->speedsNW[ii + jj*params->nx] = w2;
+               (*cells_ptr)->speedsSW[ii + jj*params->nx] = w2;
+               (*cells_ptr)->speedsSE[ii + jj*params->nx] = w2;
+             }
+           }
+
+           #pragma omp for collapse(2)
+           /* first set all cells in obstacle array to zero */
+           for (int jj = 0; jj < params->ny; jj++)
+           {
+             for (int ii = 0; ii < params->nx; ii++)
+             {
+               (*obstacles_ptr)[ii + jj*params->nx] = 0;
+             }
+           }
+
         }
 
-        /* first set all cells in obstacle array to zero */
-        for (int jj = 0; jj < params->ny; jj++)
-        {
-          for (int ii = 0; ii < params->nx; ii++)
-          {
-            (*obstacles_ptr)[ii + jj*params->nx] = 0;
-          }
-        }
 
         /* open the obstacle data file */
         fp = fopen(obstaclefile, "r");
