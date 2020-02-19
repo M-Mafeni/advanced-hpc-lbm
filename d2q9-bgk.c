@@ -100,6 +100,9 @@ typedef struct{
 int initialise(const char* paramfile, const char* obstaclefile,
                t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
                int** obstacles_ptr, float** av_vels_ptr);
+int initialise1(const char* paramfile, const char* obstaclefile,
+              t_param* params, t_speed_arr** cells_ptr, t_speed_arr** tmp_cells_ptr,
+              int** obstacles_ptr, float** av_vels_ptr);
 
 /*
 ** The main calculation methods.
@@ -147,6 +150,8 @@ int main(int argc, char* argv[])
   double tic, toc;              /* floating point numbers to calculate elapsed wallclock time */
   double usrtim;                /* floating point number to record elapsed user CPU time */
   double systim;                /* floating point number to record elapsed system CPU time */
+  t_speed_arr* cells_arr = NULL;
+  t_speed_arr* tmp_cells_arr = NULL;
 
   /* parse the command line */
   if (argc != 3)
@@ -161,96 +166,18 @@ int main(int argc, char* argv[])
 
 
   /* initialise our data structures and load values from file */
-  initialise(paramfile, obstaclefile, &params, &cells, &tmp_cells, &obstacles, &av_vels);
-  //initialise temp cells array
-  float* speeds0 = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsN = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsS = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsNW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsNE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsSW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* speedsSE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-
-  float* tmp_speeds0 = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsN = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsS = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsNW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsNE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsSW = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  float* tmp_speedsSE = (float*)_mm_malloc(sizeof(float) * params.ny * params.nx,64);
-  __assume_aligned(tmp_speeds0, 64);
-  __assume_aligned(tmp_speedsN, 64);
-  __assume_aligned(tmp_speedsS, 64);
-  __assume_aligned(tmp_speedsE, 64);
-  __assume_aligned(tmp_speedsW, 64);
-  __assume_aligned(tmp_speedsNW, 64);
-  __assume_aligned(tmp_speedsNE, 64);
-  __assume_aligned(tmp_speedsSW, 64);
-  __assume_aligned(tmp_speedsSE, 64);
-
-  __assume_aligned(speeds0, 64);
-  __assume_aligned(speedsN, 64);
-  __assume_aligned(speedsS, 64);
-  __assume_aligned(speedsE, 64);
-  __assume_aligned(speedsW, 64);
-  __assume_aligned(speedsNW, 64);
-  __assume_aligned(speedsNE, 64);
-  __assume_aligned(speedsSW, 64);
-  for (int jj = 0; jj < params.ny; jj++)
-  {
-    for (int ii = 0; ii < params.nx; ii++)
-    {
-      int index =ii + jj*params.nx;
-      speeds0[index] = cells[index].speeds[0];
-      tmp_speeds0[index] = tmp_cells[index].speeds[0];
-
-      speedsN[index] = cells[index].speeds[2];
-      tmp_speedsN[index] = tmp_cells[index].speeds[2];
-
-      speedsS[index] = cells[index].speeds[4];
-      tmp_speedsS[index] = tmp_cells[index].speeds[4];
-
-      speedsW[index] = cells[index].speeds[3];
-      tmp_speedsW[index] = tmp_cells[index].speeds[3];
-
-      speedsE[index] = cells[index].speeds[1];
-      tmp_speedsE[index] = tmp_cells[index].speeds[1];
-
-      speedsNW[index] = cells[index].speeds[6];
-      tmp_speedsNW[index] = tmp_cells[index].speeds[6];
-
-      speedsNE[index] = cells[index].speeds[5];
-      tmp_speedsNE[index] = tmp_cells[index].speeds[5];
-
-      speedsSW[index] = cells[index].speeds[7];
-      tmp_speedsSW[index] = tmp_cells[index].speeds[7];
-
-      speedsSE[index] = cells[index].speeds[8];
-      tmp_speedsSE[index] = tmp_cells[index].speeds[8];
-    }
-  }
-  t_speed_arr tmp_cells_arr = {tmp_speeds0,tmp_speedsN,tmp_speedsS,tmp_speedsW,tmp_speedsE,
-    tmp_speedsNW,tmp_speedsNE,tmp_speedsSW,tmp_speedsSE};
-
-  t_speed_arr cells_arr = {speeds0,speedsN,speedsS,speedsW,speedsE,
-    speedsNW,speedsNE,speedsSW,speedsSE};
-    t_speed_arr* cells_arr_ptr = &cells_arr;
-    t_speed_arr* tmp_cells_arr_ptr = &tmp_cells_arr;
+  initialise1(paramfile, obstaclefile, &params, &cells_arr, &tmp_cells_arr, &obstacles, &av_vels);
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
   for (int tt = 0; tt < params.maxIters; tt++)
   {
-    av_vels[tt] = timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
+    av_vels[tt] = timestep(params, cells_arr, tmp_cells_arr, obstacles);
     // timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
     // av_vels[tt] = av_velocity(params, tmp_cells_arr_ptr, obstacles);
-    t_speed_arr* p = cells_arr_ptr;
-    cells_arr_ptr = tmp_cells_arr_ptr;
-    tmp_cells_arr_ptr = p;
+    t_speed_arr* p = cells_arr;
+    cells_arr = tmp_cells_arr;
+    tmp_cells_arr = p;
 
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
@@ -270,7 +197,7 @@ int main(int argc, char* argv[])
 
   /* write final values and free memory */
   printf("==done==\n");
-  printf("Reynolds number:\t\t%.12E\n", calc_reynolds(params, &cells_arr, obstacles));
+  printf("Reynolds number:\t\t%.12E\n", calc_reynolds(params, cells_arr, obstacles));
   printf("Elapsed time:\t\t\t%.6lf (s)\n", toc - tic);
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
@@ -285,15 +212,15 @@ int main(int argc, char* argv[])
     for (int ii = 0; ii < params.nx; ii++)
     {
       int index =ii + jj*params.nx;
-      cells[index].speeds[0] = cells_arr.speeds0[index];
-      cells[index].speeds[1] = cells_arr.speedsE[index];
-      cells[index].speeds[2] = cells_arr.speedsN[index];
-      cells[index].speeds[3] = cells_arr.speedsW[index];
-      cells[index].speeds[4] = cells_arr.speedsS[index];
-      cells[index].speeds[5] = cells_arr.speedsNE[index];
-      cells[index].speeds[6] = cells_arr.speedsNW[index];
-      cells[index].speeds[7] = cells_arr.speedsSW[index];
-      cells[index].speeds[8] = cells_arr.speedsSE[index];
+      cells[index].speeds[0] = cells_arr->speeds0[index];
+      cells[index].speeds[1] = cells_arr->speedsE[index];
+      cells[index].speeds[2] = cells_arr->speedsN[index];
+      cells[index].speeds[3] = cells_arr->speedsW[index];
+      cells[index].speeds[4] = cells_arr->speedsS[index];
+      cells[index].speeds[5] = cells_arr->speedsNE[index];
+      cells[index].speeds[6] = cells_arr->speedsNW[index];
+      cells[index].speeds[7] = cells_arr->speedsSW[index];
+      cells[index].speeds[8] = cells_arr->speedsSE[index];
     }
   }
   write_values(params, cells, obstacles, av_vels);
@@ -736,6 +663,182 @@ int initialise(const char* paramfile, const char* obstaclefile,
   *av_vels_ptr = (float*)malloc(sizeof(float) * params->maxIters);
 
   return EXIT_SUCCESS;
+}
+
+int initialise1(const char* paramfile, const char* obstaclefile,
+    t_param* params, t_speed_arr** cells_ptr, t_speed_arr** tmp_cells_ptr,
+    int** obstacles_ptr, float** av_vels_ptr){
+        char   message[1024];  /* message buffer */
+        FILE*   fp;            /* file pointer */
+        int    xx, yy;         /* generic array indices */
+        int    blocked;        /* indicates whether a cell is blocked by an obstacle */
+        int    retval;         /* to hold return value for checking */
+
+        /* open the parameter file */
+        fp = fopen(paramfile, "r");
+
+        if (fp == NULL)
+        {
+          sprintf(message, "could not open input parameter file: %s", paramfile);
+          die(message, __LINE__, __FILE__);
+        }
+
+        /* read in the parameter values */
+        retval = fscanf(fp, "%d\n", &(params->nx));
+
+        if (retval != 1) die("could not read param file: nx", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%d\n", &(params->ny));
+
+        if (retval != 1) die("could not read param file: ny", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%d\n", &(params->maxIters));
+
+        if (retval != 1) die("could not read param file: maxIters", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%d\n", &(params->reynolds_dim));
+
+        if (retval != 1) die("could not read param file: reynolds_dim", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%f\n", &(params->density));
+
+        if (retval != 1) die("could not read param file: density", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%f\n", &(params->accel));
+
+        if (retval != 1) die("could not read param file: accel", __LINE__, __FILE__);
+
+        retval = fscanf(fp, "%f\n", &(params->omega));
+
+        if (retval != 1) die("could not read param file: omega", __LINE__, __FILE__);
+
+        /* and close up the file */
+        fclose(fp);
+
+        /*
+        ** Allocate memory.
+        **
+        ** Remember C is pass-by-value, so we need to
+        ** pass pointers into the initialise function.
+        **
+        ** NB we are allocating a 1D array, so that the
+        ** memory will be contiguous.  We still want to
+        ** index this memory as if it were a (row major
+        ** ordered) 2D array, however.  We will perform
+        ** some arithmetic using the row and column
+        ** coordinates, inside the square brackets, when
+        ** we want to access elements of this array.
+        **
+        ** Note also that we are using a structure to
+        ** hold an array of 'speeds'.  We will allocate
+        ** a 1D array of these structs.
+        */
+
+        /* main grid */
+        *cells_ptr = (t_speed_arr*)_mm_malloc(sizeof(t_speed_arr),64);
+        if (*cells_ptr == NULL) die("cannot allocate memory for cells", __LINE__, __FILE__);
+        (*cells_ptr)->speeds0 = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsN = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsS = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsNW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsNE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsSW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*cells_ptr)->speedsSE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        //
+
+        //
+        // /* 'helper' grid, used as scratch space */
+        // *tmp_cells_ptr = (t_speed*)malloc(sizeof(t_speed) * (params->ny * params->nx));
+        *tmp_cells_ptr = (t_speed_arr*)_mm_malloc(sizeof(t_speed_arr),64);
+        if (*tmp_cells_ptr == NULL) die("cannot allocate memory for tmp_cells", __LINE__, __FILE__);
+        (*tmp_cells_ptr)->speeds0 = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsN = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsS = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsNW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsNE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsSW = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        (*tmp_cells_ptr)->speedsSE = (float*)_mm_malloc(sizeof(float) * params->ny * params->nx,64);
+        //
+
+        /* the map of obstacles */
+        *obstacles_ptr = malloc(sizeof(int) * (params->ny * params->nx));
+
+        if (*obstacles_ptr == NULL) die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
+
+        /* initialise densities */
+        float w0 = params->density * 4.f / 9.f;
+        float w1 = params->density      / 9.f;
+        float w2 = params->density      / 36.f;
+
+        for (int jj = 0; jj < params->ny; jj++)
+        {
+          for (int ii = 0; ii < params->nx; ii++)
+          {
+            /* centre */
+            (*cells_ptr)->speeds0[ii + jj*params->nx] = w0;
+          //   /* axis directions */
+            (*cells_ptr)->speedsE[ii + jj*params->nx] = w1;
+            (*cells_ptr)->speedsN[ii + jj*params->nx] = w1;
+            (*cells_ptr)->speedsW[ii + jj*params->nx] = w1;
+            (*cells_ptr)->speedsS[ii + jj*params->nx] = w1;
+          //   /* diagonals */
+            (*cells_ptr)->speedsNE[ii + jj*params->nx] = w2;
+            (*cells_ptr)->speedsNW[ii + jj*params->nx] = w2;
+            (*cells_ptr)->speedsSW[ii + jj*params->nx] = w2;
+            (*cells_ptr)->speedsSE[ii + jj*params->nx] = w2;
+          }
+        }
+
+        /* first set all cells in obstacle array to zero */
+        for (int jj = 0; jj < params->ny; jj++)
+        {
+          for (int ii = 0; ii < params->nx; ii++)
+          {
+            (*obstacles_ptr)[ii + jj*params->nx] = 0;
+          }
+        }
+
+        /* open the obstacle data file */
+        fp = fopen(obstaclefile, "r");
+
+        if (fp == NULL)
+        {
+          sprintf(message, "could not open input obstacles file: %s", obstaclefile);
+          die(message, __LINE__, __FILE__);
+        }
+
+        /* read-in the blocked cells list */
+        while ((retval = fscanf(fp, "%d %d %d\n", &xx, &yy, &blocked)) != EOF)
+        {
+          /* some checks */
+          if (retval != 3) die("expected 3 values per line in obstacle file", __LINE__, __FILE__);
+
+          if (xx < 0 || xx > params->nx - 1) die("obstacle x-coord out of range", __LINE__, __FILE__);
+
+          if (yy < 0 || yy > params->ny - 1) die("obstacle y-coord out of range", __LINE__, __FILE__);
+
+          if (blocked != 1) die("obstacle blocked value should be 1", __LINE__, __FILE__);
+
+          /* assign to array */
+          (*obstacles_ptr)[xx + yy*params->nx] = blocked;
+        }
+
+        /* and close the file */
+        fclose(fp);
+
+        /*
+        ** allocate space to hold a record of the avarage velocities computed
+        ** at each timestep
+        */
+        *av_vels_ptr = (float*)malloc(sizeof(float) * params->maxIters);
+
+        return EXIT_SUCCESS;
+
+
 }
 
 int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
