@@ -98,9 +98,6 @@ typedef struct{
 
 /* load params, allocate memory, load obstacles & initialise fluid particle densities */
 int initialise(const char* paramfile, const char* obstaclefile,
-               t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
-               int** obstacles_ptr, float** av_vels_ptr);
-int initialise1(const char* paramfile, const char* obstaclefile,
               t_param* params, t_speed_arr** cells_ptr, t_speed_arr** tmp_cells_ptr,
               int** obstacles_ptr, float** av_vels_ptr);
 
@@ -112,11 +109,11 @@ int initialise1(const char* paramfile, const char* obstaclefile,
 float timestep(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles);
 float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles);
-int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels);
+int write_values(const t_param params, t_speed_arr* cells, int* obstacles, float* av_vels);
 
 /* finalise, including freeing up allocated memory */
-int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
-             int** obstacles_ptr, float** av_vels_ptr);
+int finalise(const t_param* params,
+    int** obstacles_ptr, float** av_vels_ptr);
 
 /* Sum all the densities in the grid.
 ** The total should remain constant from one timestep to the next. */
@@ -141,8 +138,6 @@ int main(int argc, char* argv[])
   char*    paramfile = NULL;    /* name of the input parameter file */
   char*    obstaclefile = NULL; /* name of a the input obstacle file */
   t_param  params;              /* struct to hold parameter values */
-  t_speed* cells     = NULL;    /* grid containing fluid densities */
-  t_speed* tmp_cells = NULL;    /* scratch space */
   int*     obstacles = NULL;    /* grid indicating which cells are blocked */
   float* av_vels   = NULL;     /* a record of the av. velocity computed for each timestep */
   struct timeval timstr;        /* structure to hold elapsed time */
@@ -166,15 +161,17 @@ int main(int argc, char* argv[])
 
 
   /* initialise our data structures and load values from file */
-  initialise1(paramfile, obstaclefile, &params, &cells_arr, &tmp_cells_arr, &obstacles, &av_vels);
+  // cells= (t_speed*)malloc(sizeof(t_speed) * (params.ny * params.nx));
+  // if(cells == NULL) printf("error\n" );
+  // tmp_cells= (t_speed*)malloc(sizeof(t_speed) * (params.ny * params.nx));
+  initialise(paramfile, obstaclefile, &params, &cells_arr, &tmp_cells_arr, &obstacles, &av_vels);
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
   tic = timstr.tv_sec + (timstr.tv_usec / 1000000.0);
   for (int tt = 0; tt < params.maxIters; tt++)
   {
     av_vels[tt] = timestep(params, cells_arr, tmp_cells_arr, obstacles);
-    // timestep(params, cells_arr_ptr, tmp_cells_arr_ptr, obstacles);
-    // av_vels[tt] = av_velocity(params, tmp_cells_arr_ptr, obstacles);
+
     t_speed_arr* p = cells_arr;
     cells_arr = tmp_cells_arr;
     tmp_cells_arr = p;
@@ -182,7 +179,7 @@ int main(int argc, char* argv[])
 #ifdef DEBUG
     printf("==timestep: %d==\n", tt);
     printf("av velocity: %.12E\n", av_vels[tt]);
-    printf("tot density: %.12E\n", total_density(params, &cells_arr));
+    printf("tot density: %.12E\n", total_density(params, cells_arr));
 #endif
   }
 
@@ -201,30 +198,9 @@ int main(int argc, char* argv[])
   printf("Elapsed time:\t\t\t%.6lf (s)\n", toc - tic);
   printf("Elapsed user CPU time:\t\t%.6lf (s)\n", usrtim);
   printf("Elapsed system CPU time:\t%.6lf (s)\n", systim);
-  //put ASSUME_ALIGNED HERE
 
-  //copy values back into cells
-  for (int jj = 0; jj < params.ny; jj++)
-  {
-    #pragma omp simd
-    #pragma vector aligned
-
-    for (int ii = 0; ii < params.nx; ii++)
-    {
-      int index =ii + jj*params.nx;
-      cells[index].speeds[0] = cells_arr->speeds0[index];
-      cells[index].speeds[1] = cells_arr->speedsE[index];
-      cells[index].speeds[2] = cells_arr->speedsN[index];
-      cells[index].speeds[3] = cells_arr->speedsW[index];
-      cells[index].speeds[4] = cells_arr->speedsS[index];
-      cells[index].speeds[5] = cells_arr->speedsNE[index];
-      cells[index].speeds[6] = cells_arr->speedsNW[index];
-      cells[index].speeds[7] = cells_arr->speedsSW[index];
-      cells[index].speeds[8] = cells_arr->speedsSE[index];
-    }
-  }
-  write_values(params, cells, obstacles, av_vels);
-  finalise(&params, &cells, &tmp_cells, &obstacles, &av_vels);
+  write_values(params, cells_arr, obstacles, av_vels);
+  finalise(&params, &obstacles, &av_vels);
 
   return EXIT_SUCCESS;
 }
@@ -234,8 +210,6 @@ float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_spee
 
   accelerate_flow(params, cells_arr, obstacles);
 
-  // rebound(params, cells, tmp_cells, obstacles);
- // rebound_and_collision(params, cells_arr, tmp_cells_arr, obstacles);
   return propagate(params, cells_arr, tmp_cells_arr,obstacles);;
 }
 
@@ -511,162 +485,8 @@ float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __
   return tot_u / (float)tot_cells;
 }
 
+
 int initialise(const char* paramfile, const char* obstaclefile,
-               t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
-               int** obstacles_ptr, float** av_vels_ptr)
-{
-  char   message[1024];  /* message buffer */
-  FILE*   fp;            /* file pointer */
-  int    xx, yy;         /* generic array indices */
-  int    blocked;        /* indicates whether a cell is blocked by an obstacle */
-  int    retval;         /* to hold return value for checking */
-
-  /* open the parameter file */
-  fp = fopen(paramfile, "r");
-
-  if (fp == NULL)
-  {
-    sprintf(message, "could not open input parameter file: %s", paramfile);
-    die(message, __LINE__, __FILE__);
-  }
-
-  /* read in the parameter values */
-  retval = fscanf(fp, "%d\n", &(params->nx));
-
-  if (retval != 1) die("could not read param file: nx", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%d\n", &(params->ny));
-
-  if (retval != 1) die("could not read param file: ny", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%d\n", &(params->maxIters));
-
-  if (retval != 1) die("could not read param file: maxIters", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%d\n", &(params->reynolds_dim));
-
-  if (retval != 1) die("could not read param file: reynolds_dim", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%f\n", &(params->density));
-
-  if (retval != 1) die("could not read param file: density", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%f\n", &(params->accel));
-
-  if (retval != 1) die("could not read param file: accel", __LINE__, __FILE__);
-
-  retval = fscanf(fp, "%f\n", &(params->omega));
-
-  if (retval != 1) die("could not read param file: omega", __LINE__, __FILE__);
-
-  /* and close up the file */
-  fclose(fp);
-
-  /*
-  ** Allocate memory.
-  **
-  ** Remember C is pass-by-value, so we need to
-  ** pass pointers into the initialise function.
-  **
-  ** NB we are allocating a 1D array, so that the
-  ** memory will be contiguous.  We still want to
-  ** index this memory as if it were a (row major
-  ** ordered) 2D array, however.  We will perform
-  ** some arithmetic using the row and column
-  ** coordinates, inside the square brackets, when
-  ** we want to access elements of this array.
-  **
-  ** Note also that we are using a structure to
-  ** hold an array of 'speeds'.  We will allocate
-  ** a 1D array of these structs.
-  */
-
-  /* main grid */
-  *cells_ptr = (t_speed*)malloc(sizeof(t_speed) * (params->ny * params->nx));
-
-  if (*cells_ptr == NULL) die("cannot allocate memory for cells", __LINE__, __FILE__);
-
-  /* 'helper' grid, used as scratch space */
-  *tmp_cells_ptr = (t_speed*)malloc(sizeof(t_speed) * (params->ny * params->nx));
-
-  if (*tmp_cells_ptr == NULL) die("cannot allocate memory for tmp_cells", __LINE__, __FILE__);
-
-  /* the map of obstacles */
-  *obstacles_ptr = malloc(sizeof(int) * (params->ny * params->nx));
-
-  if (*obstacles_ptr == NULL) die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
-
-  /* initialise densities */
-  float w0 = params->density * 4.f / 9.f;
-  float w1 = params->density      / 9.f;
-  float w2 = params->density      / 36.f;
-
-  for (int jj = 0; jj < params->ny; jj++)
-  {
-    for (int ii = 0; ii < params->nx; ii++)
-    {
-      /* centre */
-      (*cells_ptr)[ii + jj*params->nx].speeds[0] = w0;
-      /* axis directions */
-      (*cells_ptr)[ii + jj*params->nx].speeds[1] = w1;
-      (*cells_ptr)[ii + jj*params->nx].speeds[2] = w1;
-      (*cells_ptr)[ii + jj*params->nx].speeds[3] = w1;
-      (*cells_ptr)[ii + jj*params->nx].speeds[4] = w1;
-      /* diagonals */
-      (*cells_ptr)[ii + jj*params->nx].speeds[5] = w2;
-      (*cells_ptr)[ii + jj*params->nx].speeds[6] = w2;
-      (*cells_ptr)[ii + jj*params->nx].speeds[7] = w2;
-      (*cells_ptr)[ii + jj*params->nx].speeds[8] = w2;
-    }
-  }
-
-  /* first set all cells in obstacle array to zero */
-  for (int jj = 0; jj < params->ny; jj++)
-  {
-    for (int ii = 0; ii < params->nx; ii++)
-    {
-      (*obstacles_ptr)[ii + jj*params->nx] = 0;
-    }
-  }
-
-  /* open the obstacle data file */
-  fp = fopen(obstaclefile, "r");
-
-  if (fp == NULL)
-  {
-    sprintf(message, "could not open input obstacles file: %s", obstaclefile);
-    die(message, __LINE__, __FILE__);
-  }
-
-  /* read-in the blocked cells list */
-  while ((retval = fscanf(fp, "%d %d %d\n", &xx, &yy, &blocked)) != EOF)
-  {
-    /* some checks */
-    if (retval != 3) die("expected 3 values per line in obstacle file", __LINE__, __FILE__);
-
-    if (xx < 0 || xx > params->nx - 1) die("obstacle x-coord out of range", __LINE__, __FILE__);
-
-    if (yy < 0 || yy > params->ny - 1) die("obstacle y-coord out of range", __LINE__, __FILE__);
-
-    if (blocked != 1) die("obstacle blocked value should be 1", __LINE__, __FILE__);
-
-    /* assign to array */
-    (*obstacles_ptr)[xx + yy*params->nx] = blocked;
-  }
-
-  /* and close the file */
-  fclose(fp);
-
-  /*
-  ** allocate space to hold a record of the avarage velocities computed
-  ** at each timestep
-  */
-  *av_vels_ptr = (float*)malloc(sizeof(float) * params->maxIters);
-
-  return EXIT_SUCCESS;
-}
-
-int initialise1(const char* paramfile, const char* obstaclefile,
     t_param* params, t_speed_arr** cells_ptr, t_speed_arr** tmp_cells_ptr,
     int** obstacles_ptr, float** av_vels_ptr){
         char   message[1024];  /* message buffer */
@@ -847,25 +667,19 @@ int initialise1(const char* paramfile, const char* obstaclefile,
 
 }
 
-int finalise(const t_param* params, t_speed** cells_ptr, t_speed** tmp_cells_ptr,
-             int** obstacles_ptr, float** av_vels_ptr)
+int finalise(const t_param* params,int** obstacles_ptr, float** av_vels_ptr)
 {
-  /*
-  ** free up allocated memory
-  */
-  free(*cells_ptr);
-  *cells_ptr = NULL;
+    /*
+    ** free up allocated memory
+    */
 
-  free(*tmp_cells_ptr);
-  *tmp_cells_ptr = NULL;
+    free(*obstacles_ptr);
+    *obstacles_ptr = NULL;
 
-  free(*obstacles_ptr);
-  *obstacles_ptr = NULL;
+    free(*av_vels_ptr);
+    *av_vels_ptr = NULL;
 
-  free(*av_vels_ptr);
-  *av_vels_ptr = NULL;
-
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
 
 
@@ -900,89 +714,92 @@ float total_density(const t_param params, t_speed_arr* cells)
   return total;
 }
 
-int write_values(const t_param params, t_speed* cells, int* obstacles, float* av_vels)
-{
-  FILE* fp;                     /* file pointer */
-  const float c_sq = 1.f / 3.f; /* sq. of speed of sound */
-  float local_density;         /* per grid cell sum of densities */
-  float pressure;              /* fluid pressure in grid cell */
-  float u_x;                   /* x-component of velocity in grid cell */
-  float u_y;                   /* y-component of velocity in grid cell */
-  float u;                     /* norm--root of summed squares--of u_x and u_y */
+int write_values(const t_param params, t_speed_arr* cells, int* obstacles, float* av_vels){
+    FILE* fp;                     /* file pointer */
+    const float c_sq = 1.f / 3.f; /* sq. of speed of sound */
+    float local_density;         /* per grid cell sum of densities */
+    float pressure;              /* fluid pressure in grid cell */
+    float u_x;                   /* x-component of velocity in grid cell */
+    float u_y;                   /* y-component of velocity in grid cell */
+    float u;                     /* norm--root of summed squares--of u_x and u_y */
 
-  fp = fopen(FINALSTATEFILE, "w");
+    fp = fopen(FINALSTATEFILE, "w");
 
-  if (fp == NULL)
-  {
-    die("could not open file output file", __LINE__, __FILE__);
-  }
-
-  for (int jj = 0; jj < params.ny; jj++)
-  {
-    for (int ii = 0; ii < params.nx; ii++)
+    if (fp == NULL)
     {
-      /* an occupied cell */
-      if (obstacles[ii + jj*params.nx])
-      {
-        u_x = u_y = u = 0.f;
-        pressure = params.density * c_sq;
-      }
-      /* no obstacle */
-      else
-      {
-        local_density = 0.f;
+      die("could not open file output file", __LINE__, __FILE__);
+    }
 
-        for (int kk = 0; kk < NSPEEDS; kk++)
+    for (int jj = 0; jj < params.ny; jj++)
+    {
+      for (int ii = 0; ii < params.nx; ii++)
+      {
+        /* an occupied cell */
+        if (obstacles[ii + jj*params.nx])
         {
-          local_density += cells[ii + jj*params.nx].speeds[kk];
+          u_x = u_y = u = 0.f;
+          pressure = params.density * c_sq;
+        }
+        /* no obstacle */
+        else
+        {
+          local_density = 0.f;
+
+          int index = ii + jj*params.nx;
+          local_density += cells->speeds0[index];
+          local_density += cells->speedsN[index];
+          local_density += cells->speedsS[index];
+          local_density += cells->speedsW[index];
+          local_density += cells->speedsE[index];
+          local_density += cells->speedsNW[index];
+          local_density += cells->speedsNE[index];
+          local_density += cells->speedsSW[index];
+          local_density += cells->speedsSE[index];
+          /* compute x velocity component */
+          float u_x = (cells->speedsE[index]
+                        + cells->speedsNE[index]
+                        + cells->speedsSE[index]
+                        - (cells->speedsW[index]
+                           + cells->speedsNW[index]
+                           + cells->speedsSW[index])  )
+                       / local_density;
+          /* compute y velocity component */
+          float u_y = (cells->speedsN[index]
+                        + cells->speedsNE[index]
+                        + cells->speedsNW[index]
+                        - (cells->speedsS[index]
+                           + cells->speedsSW[index]
+                           + cells->speedsSE[index]) )
+                       / local_density;
+          /* compute norm of velocity */
+          u = sqrtf((u_x * u_x) + (u_y * u_y));
+          /* compute pressure */
+          pressure = local_density * c_sq;
         }
 
-        /* compute x velocity component */
-        u_x = (cells[ii + jj*params.nx].speeds[1]
-               + cells[ii + jj*params.nx].speeds[5]
-               + cells[ii + jj*params.nx].speeds[8]
-               - (cells[ii + jj*params.nx].speeds[3]
-                  + cells[ii + jj*params.nx].speeds[6]
-                  + cells[ii + jj*params.nx].speeds[7]))
-              / local_density;
-        /* compute y velocity component */
-        u_y = (cells[ii + jj*params.nx].speeds[2]
-               + cells[ii + jj*params.nx].speeds[5]
-               + cells[ii + jj*params.nx].speeds[6]
-               - (cells[ii + jj*params.nx].speeds[4]
-                  + cells[ii + jj*params.nx].speeds[7]
-                  + cells[ii + jj*params.nx].speeds[8]))
-              / local_density;
-        /* compute norm of velocity */
-        u = sqrtf((u_x * u_x) + (u_y * u_y));
-        /* compute pressure */
-        pressure = local_density * c_sq;
+        /* write to file */
+        fprintf(fp, "%d %d %.12E %.12E %.12E %.12E %d\n", ii, jj, u_x, u_y, u, pressure, obstacles[ii * params.nx + jj]);
       }
-
-      /* write to file */
-      fprintf(fp, "%d %d %.12E %.12E %.12E %.12E %d\n", ii, jj, u_x, u_y, u, pressure, obstacles[ii * params.nx + jj]);
     }
-  }
 
-  fclose(fp);
+    fclose(fp);
 
-  fp = fopen(AVVELSFILE, "w");
+    fp = fopen(AVVELSFILE, "w");
 
-  if (fp == NULL)
-  {
-    die("could not open file output file", __LINE__, __FILE__);
-  }
+    if (fp == NULL)
+    {
+      die("could not open file output file", __LINE__, __FILE__);
+    }
 
-  for (int ii = 0; ii < params.maxIters; ii++)
-  {
-    fprintf(fp, "%d:\t%.12E\n", ii, av_vels[ii]);
-  }
+    for (int ii = 0; ii < params.maxIters; ii++)
+    {
+      fprintf(fp, "%d:\t%.12E\n", ii, av_vels[ii]);
+    }
 
-  fclose(fp);
+    fclose(fp);
 
-  return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 }
-
 void die(const char* message, const int line, const char* file)
 {
   fprintf(stderr, "Error at line %d of file %s:\n", line, file);
