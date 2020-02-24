@@ -161,9 +161,6 @@ int main(int argc, char* argv[])
 
 
   /* initialise our data structures and load values from file */
-  // cells= (t_speed*)malloc(sizeof(t_speed) * (params.ny * params.nx));
-  // if(cells == NULL) printf("error\n" );
-  // tmp_cells= (t_speed*)malloc(sizeof(t_speed) * (params.ny * params.nx));
   initialise(paramfile, obstaclefile, &params, &cells_arr, &tmp_cells_arr, &obstacles, &av_vels);
   /* iterate for maxIters timesteps */
   gettimeofday(&timstr, NULL);
@@ -223,7 +220,6 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
   /* modify the 2nd row of the grid */
  const int jj = params.ny - 2;
 
- //PUT OPENMP FOR Pragma here?
  __assume_aligned(cells->speeds0, 64);
  __assume_aligned(cells->speedsN, 64);
  __assume_aligned(cells->speedsS, 64);
@@ -234,7 +230,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
  __assume_aligned(cells->speedsSW, 64);
  __assume_aligned(cells->speedsSE, 64);
  __assume((params.nx)%128==0);
- #pragma omp parallel for simd
+ #pragma omp parallel for simd schedule(static)
  #pragma vector aligned
   for (int ii = 0; ii < params.nx; ii++)
   {
@@ -266,8 +262,6 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
 
 float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles)
 {
-
-
 
   //propagation needs neighbouring cells
 
@@ -305,10 +299,10 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
   __assume_aligned(tmp_cells->speedsSW, 64);
   __assume_aligned(tmp_cells->speedsSE, 64);
 
-  __assume((params.nx)%128==0);
-  __assume((params.ny)%128==0);
+  __assume((params.nx)%2==0);
+  __assume((params.ny)%2==0);
 
-  #pragma omp parallel for simd reduction(+:tot_u,tot_cells) collapse(2)
+  #pragma omp parallel for simd collapse(2) reduction(+:tot_u,tot_cells) schedule(static)
   for (int jj = 0; jj < params.ny; jj++)
   {
     for (int ii = 0; ii < params.nx; ii++)
@@ -366,7 +360,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
           float u_sq = u_x * u_x + u_y * u_y;
 
           /* directional velocity components */
-          float u[NSPEEDS];
+          float u[NSPEEDS] __attribute__((aligned(64)));
           u[1] =   u_x;        /* east */
           u[2] =         u_y;  /* north */
           u[3] = - u_x;        /* west */
@@ -378,7 +372,7 @@ float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_a
 
            float e = c_sq * u_sq;
             /* equilibrium densities */
-            float d_equ[NSPEEDS];
+            float d_equ[NSPEEDS] __attribute__((aligned(64)));
             /* zero velocity density: weight w0 */
             d_equ[0] = w0 * local_density
                        * (1.f - u_sq/(2.f * c_sq) );
@@ -435,7 +429,7 @@ float av_velocity(const t_param params, t_speed_arr* __restrict__ cells, int* __
   __assume_aligned(cells->speedsSW, 64);
   __assume_aligned(cells->speedsSE, 64);
   /* loop over all non-blocked cells */
-  #pragma omp parallel for simd collapse(2) reduction(+:tot_u,tot_cells)
+  #pragma omp parallel for simd collapse(2) reduction(+:tot_u,tot_cells) schedule(static)
   #pragma vector aligned
   for (int jj = 0; jj < params.ny; jj++)
   {
@@ -585,7 +579,7 @@ int initialise(const char* paramfile, const char* obstaclefile,
         //
 
         /* the map of obstacles */
-        *obstacles_ptr = malloc(sizeof(int) * (params->ny * params->nx));
+        *obstacles_ptr = (int*) malloc(sizeof(int) * (params->ny * params->nx));
 
         if (*obstacles_ptr == NULL) die("cannot allocate column memory for obstacles", __LINE__, __FILE__);
 
@@ -593,9 +587,19 @@ int initialise(const char* paramfile, const char* obstaclefile,
         float w0 = params->density * 4.f / 9.f;
         float w1 = params->density      / 9.f;
         float w2 = params->density      / 36.f;
+        __assume_aligned((*cells_ptr)->speeds0, 64);
+        __assume_aligned((*cells_ptr)->speedsN, 64);
+        __assume_aligned((*cells_ptr)->speedsS, 64);
+        __assume_aligned((*cells_ptr)->speedsE, 64);
+        __assume_aligned((*cells_ptr)->speedsW, 64);
+        __assume_aligned((*cells_ptr)->speedsNW, 64);
+        __assume_aligned((*cells_ptr)->speedsNE, 64);
+        __assume_aligned((*cells_ptr)->speedsSW, 64);
+        __assume_aligned((*cells_ptr)->speedsSE, 64);
+
         #pragma omp parallel
         {
-           #pragma omp for collapse(2) nowait
+           #pragma omp for simd collapse(2) nowait
            for (int jj = 0; jj < params->ny; jj++)
            {
              for (int ii = 0; ii < params->nx; ii++)
@@ -615,7 +619,7 @@ int initialise(const char* paramfile, const char* obstaclefile,
              }
            }
 
-           #pragma omp for collapse(2)
+           #pragma omp for simd collapse(2)
            /* first set all cells in obstacle array to zero */
            for (int jj = 0; jj < params->ny; jj++)
            {
