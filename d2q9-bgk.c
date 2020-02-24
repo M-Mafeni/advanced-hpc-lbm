@@ -108,7 +108,7 @@ int initialise(const char* paramfile, const char* obstaclefile,
 */
 float timestep(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells, int* __restrict__ obstacles);
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles);
-float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles);
+float lattice(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles);
 int write_values(const t_param params, t_speed_arr* cells, int* obstacles, float* av_vels);
 
 /* finalise, including freeing up allocated memory */
@@ -207,7 +207,7 @@ float timestep(const t_param params, t_speed_arr* __restrict__ cells_arr, t_spee
 
   accelerate_flow(params, cells_arr, obstacles);
 
-  return propagate(params, cells_arr, tmp_cells_arr,obstacles);;
+  return lattice(params, cells_arr, tmp_cells_arr,obstacles);;
 }
 
 int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* __restrict__ obstacles)
@@ -260,7 +260,7 @@ int accelerate_flow(const t_param params, t_speed_arr* __restrict__ cells, int* 
   return EXIT_SUCCESS;
 }
 
-float propagate(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles)
+float lattice(const t_param params, t_speed_arr* __restrict__ cells, t_speed_arr* __restrict__ tmp_cells,int* __restrict__ obstacles)
 {
 
   //propagation needs neighbouring cells
